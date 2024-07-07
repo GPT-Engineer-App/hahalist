@@ -17,29 +17,6 @@ const fromSupabase = async (query) => {
     return data;
 };
 
-/* supabase integration types
-
-### user
-
-| name       | type        | format | required |
-|------------|-------------|--------|----------|
-| id         | int8        | number | true     |
-| username   | text        | string | true     |
-| email      | text        | string | true     |
-| created_at | timestamptz | string | false    |
-
-### task
-
-| name        | type        | format | required |
-|-------------|-------------|--------|----------|
-| id          | int8        | number | true     |
-| title       | text        | string | true     |
-| description | text        | string | false    |
-| due_date    | date        | string | false    |
-| user_id     | int8        | number | true     |
-
-*/
-
 export const useUsers = () => useQuery({
     queryKey: ['users'],
     queryFn: () => fromSupabase(supabase.from('user').select('*')),
