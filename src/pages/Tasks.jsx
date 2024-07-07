@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerDemo } from "@/components/ui/date-picker";
 import { toast } from "sonner";
+import { useTasks, useAddTask, useUpdateTask, useDeleteTask } from "@/integrations/supabase/index.js";
 
 const categories = ["Personal", "Work", "Shopping"];
 const humorousMessages = [
@@ -13,44 +14,12 @@ const humorousMessages = [
 ];
 
 const Tasks = () => {
-  const [tasks, setTasks] = useState([]);
-  const [newTask, setNewTask] = useState({ name: "", category: "", dueDate: null, reminder: "" });
+  const { data: tasks, error, isLoading } = useTasks();
+  const addTaskMutation = useAddTask();
+  const updateTaskMutation = useUpdateTask();
+  const deleteTaskMutation = useDeleteTask();
 
-  useEffect(() => {
-    if (!("Notification" in window)) {
-      toast.error("This browser does not support desktop notifications.");
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      tasks.forEach((task, index) => {
-        if (task.dueDate) {
-          const now = new Date();
-          const dueDate = new Date(task.dueDate);
-          const timeDiff = dueDate - now;
-
-          if (timeDiff <= 0) {
-            showNotification(task.name, humorousMessages[2]); // Overdue
-          } else if (timeDiff <= 3600000) {
-            showNotification(task.name, humorousMessages[1]); // Due soon (within an hour)
-          } else if (timeDiff <= 86400000) {
-            showNotification(task.name, humorousMessages[0]); // Upcoming (within a day)
-          }
-        }
-      });
-    }, 60000); // Check every minute
-
-    return () => clearInterval(interval);
-  }, [tasks]);
-
-  const showNotification = (title, message) => {
-    if (Notification.permission === "granted") {
-      new Notification(title, { body: message });
-    }
-  };
+  const [newTask, setNewTask] = useState({ title: "", category: "", due_date: null, reminder: "" });
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -58,20 +27,34 @@ const Tasks = () => {
   };
 
   const handleAddTask = () => {
-    if (!newTask.name || !newTask.category) {
+    if (!newTask.title || !newTask.category) {
       toast.error("Please fill in all required fields.");
       return;
     }
-    setTasks([...tasks, newTask]);
-    setNewTask({ name: "", category: "", dueDate: null, reminder: "" });
-    toast.success("Task added successfully!");
+    addTaskMutation.mutate(newTask, {
+      onSuccess: () => {
+        toast.success("Task added successfully!");
+        setNewTask({ title: "", category: "", due_date: null, reminder: "" });
+      },
+      onError: (error) => {
+        toast.error(`Error adding task: ${error.message}`);
+      },
+    });
   };
 
-  const handleDeleteTask = (index) => {
-    const updatedTasks = tasks.filter((_, i) => i !== index);
-    setTasks(updatedTasks);
-    toast.success("Task deleted successfully!");
+  const handleDeleteTask = (id) => {
+    deleteTaskMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success("Task deleted successfully!");
+      },
+      onError: (error) => {
+        toast.error(`Error deleting task: ${error.message}`);
+      },
+    });
   };
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error loading tasks: {error.message}</div>;
 
   return (
     <div className="container mx-auto p-4">
@@ -79,8 +62,8 @@ const Tasks = () => {
       <div className="mb-4">
         <Input
           placeholder="Task Name"
-          name="name"
-          value={newTask.name}
+          name="title"
+          value={newTask.title}
           onChange={handleInputChange}
           className="mb-2"
         />
@@ -97,8 +80,8 @@ const Tasks = () => {
           </SelectContent>
         </Select>
         <DatePickerDemo
-          selected={newTask.dueDate}
-          onSelect={(date) => setNewTask({ ...newTask, dueDate: date })}
+          selected={newTask.due_date}
+          onSelect={(date) => setNewTask({ ...newTask, due_date: date })}
           className="mb-2"
         />
         <Input
@@ -111,15 +94,15 @@ const Tasks = () => {
         <Button onClick={handleAddTask}>Add Task</Button>
       </div>
       <div>
-        {tasks.map((task, index) => (
-          <div key={index} className="border p-2 mb-2 flex justify-between items-center">
+        {tasks.map((task) => (
+          <div key={task.id} className="border p-2 mb-2 flex justify-between items-center">
             <div>
-              <h2 className="font-bold">{task.name}</h2>
+              <h2 className="font-bold">{task.title}</h2>
               <p>Category: {task.category}</p>
-              <p>Due Date: {task.dueDate ? task.dueDate.toLocaleDateString() : "None"}</p>
+              <p>Due Date: {task.due_date ? new Date(task.due_date).toLocaleDateString() : "None"}</p>
               <p>Reminder: {task.reminder}</p>
             </div>
-            <Button variant="destructive" onClick={() => handleDeleteTask(index)}>
+            <Button variant="destructive" onClick={() => handleDeleteTask(task.id)}>
               Delete
             </Button>
           </div>
